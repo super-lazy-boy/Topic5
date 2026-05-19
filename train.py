@@ -36,36 +36,36 @@ def load_and_prepare_data(config: dict):
     data_path = config["data_path"]
     num_rec = config["num_recordings"]
 
-    tracks_df = load_multiple_recordings(data_path, list(range(1, num_rec + 1)))
+    tracks_df, recordingmeta_df = load_multiple_recordings(data_path, list(range(1, num_rec + 1)))
 
-    X, y, scaler = create_sequences(
-        tracks_df,
+    X, y, scaler, track_lengths = create_sequences(
+        tracks_df, 
         history_len=config["history_len"],
         future_len=config["future_len"],
         min_track_len=config["min_track_len"],
-        use_agent_centric=config["use_agent_centric"],
-        use_interaction=config["use_interaction"],
+        use_agent_centric=config["use_agent_centric"]
     )
 
-    (train_loader, val_loader, test_loader,
-     X_train, X_val, X_test,
-     y_train, y_val, y_test) = create_dataloaders(
-        X, y,
-        batch_size=config["batch_size"],
-        train_ratio=config["train_ratio"],
-        val_ratio=config["val_ratio"],
-    )
+    # selected_meta = recordingmeta_df[recordingmeta_df["id"].isin(range(1, num_rec + 1))] 
+    # total_vehicles = selected_meta["numVehicles"].sum()
+
+
+    train_loader, val_loader, test_loader,X_train, X_val, X_test,y_train, y_val, y_test = create_dataloaders(X, y, track_lengths=track_lengths,
+                                                  batch_size=config["batch_size"],
+                                                    train_ratio=config["train_ratio"],
+                                                    val_ratio=config["val_ratio"],)
+    input_dim = X_train.shape[-1]
 
     # 保留测试集的物理坐标版本 (用于可视化)
     X_test_phys = inverse_transform_coords(X_test, scaler)
     y_test_phys = inverse_transform_coords(y_test, scaler)
 
     print(f"\n  数据加载完成！")
-    print(f"  训练集: {len(train_loader.dataset):,} 样本")
-    print(f"  验证集: {len(val_loader.dataset):,}   样本")
-    print(f"  测试集: {len(test_loader.dataset):,} 样本")
+    print(f"  训练集: {len(train_loader):,} 样本")
+    print(f"  验证集: {len(val_loader):,}   样本")
+    print(f"  测试集: {len(test_loader):,} 样本")
 
-    return train_loader, val_loader, test_loader, scaler, X_test_phys, y_test_phys
+    return train_loader, val_loader, test_loader, scaler, X_test_phys, y_test_phys,input_dim
 
 
 def train_epoch(
@@ -399,10 +399,11 @@ def visualize_attention(
 
 
 def main():
-    train_loader, val_loader, test_loader, scaler, X_test_phys, y_test_phys = load_and_prepare_data(CONFIG)
+    
+    train_loader, val_loader, test_loader, scaler, X_test_phys, y_test_phys, input_dim = load_and_prepare_data(CONFIG)
 
     model = TransformerTrajectoryPredictor(
-        input_dim=CONFIG["input_dim"],
+        input_dim=input_dim,
         d_model=CONFIG["d_model"],
         nhead=CONFIG["nhead"],
         num_layers=CONFIG["num_layers"],

@@ -17,7 +17,7 @@ CONFIG = {
     "use_interaction": True,   # 是否提取周围车辆交互特征 (已接入 Decoder 模型)
 
     # ── 模型超参数 ──
-    "input_dim": 28,           # 输入特征维度: 4(基础: x,y,vx,vy) + 24(交互: 6方向×4特征)
+    # "input_dim": 28,           # 输入特征维度: 4(基础: x,y,vx,vy) + 24(交互: 6方向×4特征)
     "d_model": 64,             # Transformer 隐空间维度
     "nhead": 4,                # 多头注意力头数
     "num_layers": 2,           # Transformer Encoder 层数

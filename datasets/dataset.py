@@ -5,25 +5,10 @@ from sklearn.preprocessing import StandardScaler
 from typing import Tuple
 from datasets.data_utils import load_recording, create_sequences
 from utils import inverse_transform_coords
+import os
+from typing import List, Dict, Any
 
 class TrajectoryDataset(Dataset):
-    """
-    【PyTorch Dataset】封装 MTR 预处理后的轨迹数据（支持 lazy subset）。
-
-    当 X/y 为 np.memmap 时，torch.from_numpy 创建的 tensor 与 memmap
-    共享内存，OS 按需换页，不会一次性加载全部数据到 RAM。
-
-    === __getitem__ 返回的 Shape ===
-
-      X_sample: (history_len, feature_dim)  例: (20, 28)
-      y_sample: (future_len,  feature_dim)  例: (30, 28)
-
-    参数:
-        X:       NumPy 数组或 memmap, Shape = (N, history_len, feature_dim)
-        y:       NumPy 数组或 memmap, Shape = (N, future_len,  feature_dim)
-        indices: 可选，子集索引。为 None 则使用全部数据。
-                 传入后 __getitem__ 会映射到对应样本，避免 X[indices] 复制。
-    """
 
     def __init__(self, X: np.ndarray, y: np.ndarray, indices: np.ndarray = None):
         # memmap → tensor 共享内存，OS 按需加载 → 内存高效
@@ -40,50 +25,67 @@ class TrajectoryDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-def create_dataloaders(
-    X: np.ndarray,
-    y: np.ndarray,
-    batch_size: int = 64,
-    train_ratio: float = 0.70,
-    val_ratio: float = 0.15,
-    shuffle_train: bool = True,
-) -> Tuple[DataLoader, DataLoader, DataLoader, np.ndarray, np.ndarray, np.ndarray]:
-    """
-    划分训练集/验证集/测试集并创建 DataLoader。
+def create_dataloaders(X: np.ndarray,
+                        y: np.ndarray,
+                        track_lengths: List[int],  
+                        batch_size: int = 64,
+                        train_ratio: float = 0.70,
+                        val_ratio: float = 0.15,
+                        shuffle_train: bool = True) -> Tuple[DataLoader, DataLoader, DataLoader, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
 
-    === 内存优化 ===
-    使用 TrajectoryDataset 的 indices 参数实现 lazy subset：
-    - train/val Dataset 持有完整 memmap + 子集索引，按需从磁盘读取
-    - 不再做 X[train_idx] 的 fancy-index 拷贝（会加载全量到 RAM）
-    - 仅 test 集做拷贝（15% 数据，约 3 GiB），供 train.py 做物理坐标还原
-    """
-    total = len(X)
-    indices = np.random.permutation(total)
+    num_vehicles = len(track_lengths)
+    
+    # ── Step 1: 按照车辆数量进行打乱划分 ──
+    vehicle_indices = np.random.permutation(num_vehicles)
 
-    n_train = int(total * train_ratio)
-    n_val = int(total * val_ratio)
+    n_train_veh = int(num_vehicles * train_ratio)
+    n_val_veh = int(num_vehicles * val_ratio)
 
-    train_idx = indices[:n_train]
-    val_idx = indices[n_train : n_train + n_val]
-    test_idx = indices[n_train + n_val :]
+    train_veh_idx = vehicle_indices[:n_train_veh]
+    val_veh_idx = vehicle_indices[n_train_veh : n_train_veh + n_val_veh]
+    test_veh_idx = vehicle_indices[n_train_veh + n_val_veh:]
 
-    # ── Lazy Dataset（不拷贝数据，通过 indices 映射）──
+    # ── Step 2: 计算每辆车在 X 中的起始和结束行号 ──
+    # np.cumsum 累加算出边界，前面补 0
+    # 例如 track_lengths=[50, 120] -> bounds=[0, 50, 170]
+    bounds = np.insert(np.cumsum(track_lengths), 0, 0)
+
+    # ── Step 3: 根据划分好的车辆，收集它们对应的样本行号 ──
+    train_idx, val_idx, test_idx = [], [], []
+
+    for v_idx in train_veh_idx:
+        train_idx.extend(range(bounds[v_idx], bounds[v_idx+1]))
+        
+    for v_idx in val_veh_idx:
+        val_idx.extend(range(bounds[v_idx], bounds[v_idx+1]))
+        
+    for v_idx in test_veh_idx:
+        test_idx.extend(range(bounds[v_idx], bounds[v_idx+1]))
+
+    train_idx = np.array(train_idx)
+    val_idx = np.array(val_idx)
+    test_idx = np.array(test_idx)
+
+    total_samples = len(X)
+    
+    # ── Lazy Dataset ──
     train_dataset = TrajectoryDataset(X, y, train_idx)
     val_dataset = TrajectoryDataset(X, y, val_idx)
     test_dataset = TrajectoryDataset(X, y, test_idx)
 
-    # ── Test 集加载到内存（供 inverse_transform_coords 等可视化用途）──
-    # 只有 15% 数据，约 3 GiB，可接受
+    # ── Test 集加载到内存 ──
     X_test = np.array(X[test_idx])
     y_test = np.array(y[test_idx])
-    # train/val 返回 memmap 原始引用（train.py 不使用它们做直接计算）
+    
     X_train, y_train = X, y
     X_val, y_val = X, y
 
-    print(f"[create_dataloaders] 数据划分:")
-    print(f"  训练集: {n_train:,} 样本 ({train_ratio*100:.0f}%) — lazy memmap")
-    print(f"  验证集: {n_val:,}   样本 ({val_ratio*100:.0f}%) — lazy memmap")
-    print(f"  测试集: {len(X_test):,} 样本 ({(1-train_ratio-val_ratio)*100:.0f}%) — 已加载")
+    # 打印信息 (因为车辆轨迹长度不一，样本比例会和车辆比例略有偏差，这是正常的)
+    print(f"\n[create_dataloaders] 按【独立车辆】划分数据:")
+    print(f"  总车辆数: {num_vehicles:,} 辆")
+    print(f"  训练集: {len(train_veh_idx):,} 辆车 -> {len(train_idx):,} 样本 ({len(train_idx)/total_samples*100:.1f}%)")
+    print(f"  验证集: {len(val_veh_idx):,} 辆车 -> {len(val_idx):,} 样本 ({len(val_idx)/total_samples*100:.1f}%)")
+    print(f"  测试集: {len(test_veh_idx):,} 辆车 -> {len(test_idx):,} 样本 ({len(test_idx)/total_samples*100:.1f}%)\n")
 
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=shuffle_train,
@@ -96,9 +98,4 @@ def create_dataloaders(
         test_dataset, batch_size=batch_size, shuffle=False, num_workers=0,
     )
 
-    print(f"  DataLoader 创建完毕 (batch_size={batch_size})")
-    print(f"  每个 batch: (B, {X.shape[1]}, {X.shape[2]})")
-
-    return (train_loader, val_loader, test_loader,
-            X_train, X_val, X_test,
-            y_train, y_val, y_test)
+    return train_loader, val_loader, test_loader,X_train, X_val, X_test,y_train, y_val, y_test
