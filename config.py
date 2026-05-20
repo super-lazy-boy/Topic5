@@ -5,7 +5,7 @@ CONFIG = {
     "data_path": r"D:\ZAQ\code\LP\Topic5\data",
 
     # ── 数据加载 ──
-    "num_recordings": 10,       # 加载前 N 个录像 (1~60, 越多数据效果越好但越慢)
+    "num_recordings": 5,       # 加载前 N 个录像 (1~60, 越多数据效果越好但越慢)
     "min_track_len": 60,       # 最短轨迹长度 ( < history+future 的轨迹会被丢弃)
 
     # ── 序列参数 ──
@@ -18,6 +18,7 @@ CONFIG = {
 
     # ── 模型超参数 ──
     # "input_dim": 28,           # 输入特征维度: 4(基础: x,y,vx,vy) + 24(交互: 6方向×4特征)
+    "output_dim": 2,           # 输出特征维度: 
     "d_model": 64,             # Transformer 隐空间维度
     "nhead": 4,                # 多头注意力头数
     "num_layers": 2,           # Transformer Encoder 层数
@@ -26,7 +27,7 @@ CONFIG = {
 
     # ── 训练超参数 ──
     "batch_size": 16,          # 批大小 (CPU 训练建议 32~128)
-    "epochs": 30,              # 最大训练轮数
+    "epochs": 2,              # 最大训练轮数
     "lr": 0.001,               # 初始学习率
     "weight_decay": 1e-5,      # L2 正则化系数
     "lr_step_size": 10,        # 学习率衰减步长 (每 N 个 epoch 衰减一次)

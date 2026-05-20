@@ -86,11 +86,12 @@ def train_epoch(
         X_batch = X_batch.to(device)  # Shape: (B, 20, 4)
         y_batch = y_batch.to(device)  # Shape: (B, 30, 4)
 
-        optimizer.zero_grad()          # 清空上一轮的梯度
+        optimizer.zero_grad()          
 
         pred = model(X_batch)          # 前向传播 → (B, 30, 4)
-        loss = criterion(pred, y_batch)  # 计算 MSE 损失
-        loss.backward()                # 反向传播 → 计算各参数的梯度
+        target_pos = y_batch[:, :, 0:2]
+        loss = criterion(pred, target_pos)  
+        loss.backward()                
         optimizer.step()               # 更新参数
 
         total_loss += loss.item()      # 累加损失 (item() 将标量 Tensor 转为 Python float)
@@ -114,7 +115,8 @@ def validate_epoch(
         y_batch = y_batch.to(device)
 
         pred = model(X_batch)               # (B, 30, 4)
-        loss = criterion(pred, y_batch)
+        target_pos = y_batch[:, :, 0:2]
+        loss = criterion(pred, target_pos)
         total_loss += loss.item()
 
     return total_loss / len(loader)
@@ -225,9 +227,13 @@ def evaluate_model(
     y_pred_norm = np.concatenate(all_preds, axis=0)
     y_true_norm = np.concatenate(all_targets, axis=0)
 
-    # 还原到物理坐标
-    y_pred_phys = inverse_transform_coords(y_pred_norm, scaler)
-    y_true_phys = inverse_transform_coords(y_true_norm, scaler)
+    y_true_norm = y_true_norm[:, :, 0:2]
+
+    mean_p = scaler.mean_[0:2]
+    scale_p = scaler.scale_[0:2]
+
+    y_pred_phys = y_pred_norm * scale_p + mean_p
+    y_true_phys = y_true_norm * scale_p + mean_p
 
     # 计算指标
     ade, fde, errors_per_step = compute_ade_fde(y_pred_phys, y_true_phys)
@@ -404,6 +410,7 @@ def main():
 
     model = TransformerTrajectoryPredictor(
         input_dim=input_dim,
+        output_dim=CONFIG["output_dim"],
         d_model=CONFIG["d_model"],
         nhead=CONFIG["nhead"],
         num_layers=CONFIG["num_layers"],
@@ -414,12 +421,11 @@ def main():
     total_params = sum(p.numel() for p in model.parameters())
 
     history = train_model(model, train_loader, val_loader, CONFIG)
+
     eval_results = evaluate_model(model, test_loader, scaler, CONFIG)
 
 
     fig1, (ax_loss, ax_error) = visualize_training_curves(history)
-
-    # 在右图上补充逐帧误差曲线 (需要在 evaluate_model 之后)
     future_len = CONFIG["future_len"]
     ax_error.plot(range(1, future_len + 1), eval_results["errors_per_step"],
                   "o-", color="steelblue", markersize=3, linewidth=2)
@@ -431,6 +437,7 @@ def main():
     ax_error.legend(fontsize=10)
     plt.tight_layout()
     num_viz = min(5, len(X_test_phys))
+
     fig2 = visualize_predictions(
         X_test_phys,
         eval_results["y_true_phys"],

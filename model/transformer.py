@@ -6,7 +6,8 @@ from model.encoder import PositionalEncoding
 class TransformerTrajectoryPredictor(nn.Module):
     def __init__(
         self,
-        input_dim: int = 4,            # 输入特征维度: 4(仅基础) 或 28(含24维交互特征)
+        input_dim: int = 11,           # 输入特征维度 (x, y, z, vx, vy, vz, ax, ay, az, yaw, yaw_rate)
+        output_dim: int = 4,           # 输出特征维度
         d_model: int = 64,             # 隐空间维度
         nhead: int = 4,                # 多头注意力的头数 (必须整除 d_model)
         num_layers: int = 2,           # Transformer Encoder 层数
@@ -19,6 +20,7 @@ class TransformerTrajectoryPredictor(nn.Module):
         self.d_model = d_model
         self.future_len = future_len
         self.input_dim = input_dim
+        self.output_dim = output_dim
         self.nhead = nhead
         self.num_layers = num_layers
 
@@ -58,7 +60,7 @@ class TransformerTrajectoryPredictor(nn.Module):
             decoder_layer, num_layers=num_decoder_layers
         )
         # Shape: (B, 30, 64) → (B, 30, 4)
-        self.output_proj = nn.Linear(d_model, input_dim)
+        self.output_proj = nn.Linear(d_model, output_dim)
 
     def forward(self, x: torch.Tensor, return_attention: bool = False):
         batch_size, seq_len, _ = x.shape
@@ -107,7 +109,7 @@ class TransformerTrajectoryPredictor(nn.Module):
         )
         # decoded: (B, 30, 64)
 
-        # (B, 30, 64) → (B, 30, input_dim)
+        # (B, 30, 64) → (B, 30, output_dim)
         out = self.output_proj(decoded)
 
         if return_attention:
