@@ -243,17 +243,20 @@ def create_sequences(tracks_df: pd.DataFrame,
                 w_sca = global_values[w_start : w_start + window_len, 6:11]
 
                 # 转换到以当前车为中心的局部坐标系
-                lp, lv, la, ls = transform_to_agent_centric(w_pos, w_vel, w_acc, w_sca, ...)
+                lp, lv, la, ls = transform_to_agent_centric(
+                    w_pos, w_vel, w_acc, w_sca,
+                    ref_idx=history_len - 1
+                )
                 lw = np.concatenate([lp, lv, la, ls], axis=-1)
-                track_history_base.append(lw[:history_len])       # transform 已创建新数组
+                track_history_base.append(lw[:history_len])
                 track_future_base.append(lw[history_len:])
         else:
             
             for start in range(num_windows):
                 hist_end = start + history_len
                 fut_end = hist_end + future_len
-                track_history_base.append(global_values[start:hist_end].copy())
-                track_future_base.append(global_values[hist_end:fut_end].copy())
+                track_history_base.append(global_values[start:hist_end])
+                track_future_base.append(global_values[hist_end:fut_end])
 
         # 堆叠当前 track 的基础特征
         # (num_windows, history_len, 4) 和 (num_windows, future_len, 4)

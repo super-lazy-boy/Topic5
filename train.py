@@ -73,36 +73,28 @@ def train_epoch(
     loader: DataLoader,
     criterion: nn.Module,
     optimizer: torch.optim.Optimizer,
+    scaler: torch.amp.GradScaler,
     device: torch.device,
 ) -> float:
-    """
-    执行一个训练 epoch。
-    """
-    model.train()  # 切换到训练模式 (启用 Dropout)
+    model.train()
     total_loss = 0.0
-    scaler = torch.amp.GradScaler("cuda") 
-    
 
     for X_batch, y_batch in loader:
-        # 将数据移到指定设备 (CPU/GPU)
         X_batch = X_batch.to(device, non_blocking=True)
         y_batch = y_batch.to(device, non_blocking=True)
 
-        optimizer.zero_grad()          
-
-        pred = model(X_batch)          # 前向传播 → (B, 30, 4)
-        target_pos = y_batch[:, :, 0:2]
+        optimizer.zero_grad()
 
         with torch.amp.autocast("cuda"):
             pred = model(X_batch)
+            target_pos = y_batch[:, :, 0:2]
             loss = criterion(pred, target_pos)
+
         scaler.scale(loss).backward()
         scaler.step(optimizer)
         scaler.update()
-        loss.backward()                
-        optimizer.step()               # 更新参数
 
-        total_loss += loss.item()      # 累加损失 (item() 将标量 Tensor 转为 Python float)
+        total_loss += loss.item()
 
     return total_loss / len(loader)
 
@@ -119,12 +111,13 @@ def validate_epoch(
     total_loss = 0.0
 
     for X_batch, y_batch in loader:
-        X_batch = X_batch.to(device)
-        y_batch = y_batch.to(device)
+        X_batch = X_batch.to(device, non_blocking=True)
+        y_batch = y_batch.to(device, non_blocking=True)
 
-        pred = model(X_batch)               # (B, 30, 4)
-        target_pos = y_batch[:, :, 0:2]
-        loss = criterion(pred, target_pos)
+        with torch.amp.autocast("cuda"):
+            pred = model(X_batch)
+            target_pos = y_batch[:, :, 0:2]
+            loss = criterion(pred, target_pos)
         total_loss += loss.item()
 
     return total_loss / len(loader)
@@ -138,21 +131,22 @@ def train_model(
 ) -> dict:
     device = torch.device(config["device"])
     model = model.to(device)
-    model = torch.compile(model, mode="reduce-overhead")
+    if hasattr(torch, "compile"):
+        model = torch.compile(model, mode="reduce-overhead")
 
     # ── 损失函数与优化器 ──
-    criterion = nn.MSELoss()  # 均方误差: mean((pred - target)²)
+    criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=config["lr"],
         weight_decay=config["weight_decay"],
     )
-    # 学习率调度器: 每 step_size 个 epoch 将 lr 乘以 gamma
+    scaler = torch.amp.GradScaler("cuda")
     scheduler = torch.optim.lr_scheduler.OneCycleLR(
-      optimizer, max_lr=config["lr"],
-      steps_per_epoch=len(train_loader),
-      epochs=config["epochs"],
-      pct_start=0.1,  # 前10%时间warmup
+        optimizer, max_lr=config["lr"],
+        steps_per_epoch=len(train_loader),
+        epochs=config["epochs"],
+        pct_start=0.1,
     )
 
     train_losses, val_losses = [], []
@@ -169,7 +163,7 @@ def train_model(
 
     for epoch in range(1, config["epochs"] + 1):
         # ── 训练 ──
-        train_loss = train_epoch(model, train_loader, criterion, optimizer, device)
+        train_loss = train_epoch(model, train_loader, criterion, optimizer, scaler, device)
 
         # ── 验证 ──
         val_loss = validate_epoch(model, val_loader, criterion, device)

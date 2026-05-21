@@ -29,10 +29,8 @@ CONFIG = {
     "batch_size": 1024,          # 批大小 (CPU 训练建议 32~128)
     "epochs": 50,              # 最大训练轮数
     "lr": 0.001,               # 初始学习率
-    "weight_decay": 1e-5,      # L2 正则化系数
-    "lr_step_size": 10,        # 学习率衰减步长 (每 N 个 epoch 衰减一次)
-    "lr_gamma": 0.5,           # 学习率衰减因子
-    "patience": 8,             # 早停耐心值 (验证 loss 不降 N 轮后停止)
+    "weight_decay": 1e-4,      # L2 正则化系数 (Transformer 推荐 1e-4)
+    "patience": 12,            # 早停耐心值 (验证 loss 不降 N 轮后停止)
 
     # ── 数据划分 ──
     "train_ratio": 0.70,       # 训练集比例
