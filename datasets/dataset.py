@@ -89,13 +89,16 @@ def create_dataloaders(X: np.ndarray,
 
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=shuffle_train,
-        num_workers=0,
+        num_workers=8, pin_memory=True, persistent_workers=True,
+        prefetch_factor=4,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False, num_workers=0,
+        val_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, persistent_workers=True,
+        prefetch_factor=4,
     )
     test_loader = DataLoader(
-        test_dataset, batch_size=batch_size, shuffle=False, num_workers=0,
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=8, pin_memory=True, persistent_workers=True,
+        prefetch_factor=4,
     )
 
     return train_loader, val_loader, test_loader,X_train, X_val, X_test,y_train, y_val, y_test

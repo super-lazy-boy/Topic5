@@ -26,8 +26,8 @@ CONFIG = {
     "dropout": 0.1,            # Dropout 概率
 
     # ── 训练超参数 ──
-    "batch_size": 32,          # 批大小 (CPU 训练建议 32~128)
-    "epochs": 30,              # 最大训练轮数
+    "batch_size": 1024,          # 批大小 (CPU 训练建议 32~128)
+    "epochs": 50,              # 最大训练轮数
     "lr": 0.001,               # 初始学习率
     "weight_decay": 1e-5,      # L2 正则化系数
     "lr_step_size": 10,        # 学习率衰减步长 (每 N 个 epoch 衰减一次)

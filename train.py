@@ -80,17 +80,25 @@ def train_epoch(
     """
     model.train()  # 切换到训练模式 (启用 Dropout)
     total_loss = 0.0
+    scaler = torch.amp.GradScaler("cuda") 
+    
 
     for X_batch, y_batch in loader:
         # 将数据移到指定设备 (CPU/GPU)
-        X_batch = X_batch.to(device)  # Shape: (B, 20, 4)
-        y_batch = y_batch.to(device)  # Shape: (B, 30, 4)
+        X_batch = X_batch.to(device, non_blocking=True)
+        y_batch = y_batch.to(device, non_blocking=True)
 
         optimizer.zero_grad()          
 
         pred = model(X_batch)          # 前向传播 → (B, 30, 4)
         target_pos = y_batch[:, :, 0:2]
-        loss = criterion(pred, target_pos)  
+
+        with torch.amp.autocast("cuda"):
+            pred = model(X_batch)
+            loss = criterion(pred, target_pos)
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
         loss.backward()                
         optimizer.step()               # 更新参数
 
@@ -130,6 +138,7 @@ def train_model(
 ) -> dict:
     device = torch.device(config["device"])
     model = model.to(device)
+    model = torch.compile(model, mode="reduce-overhead")
 
     # ── 损失函数与优化器 ──
     criterion = nn.MSELoss()  # 均方误差: mean((pred - target)²)
@@ -139,10 +148,11 @@ def train_model(
         weight_decay=config["weight_decay"],
     )
     # 学习率调度器: 每 step_size 个 epoch 将 lr 乘以 gamma
-    scheduler = torch.optim.lr_scheduler.StepLR(
-        optimizer,
-        step_size=config["lr_step_size"],
-        gamma=config["lr_gamma"],
+    scheduler = torch.optim.lr_scheduler.OneCycleLR(
+      optimizer, max_lr=config["lr"],
+      steps_per_epoch=len(train_loader),
+      epochs=config["epochs"],
+      pct_start=0.1,  # 前10%时间warmup
     )
 
     train_losses, val_losses = [], []

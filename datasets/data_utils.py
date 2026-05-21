@@ -237,23 +237,16 @@ def create_sequences(tracks_df: pd.DataFrame,
         if use_agent_centric: # 如果开启以自己车为中心
             for w_start in range(num_windows):
                 # 按列索引截取对应特征
-                w_pos = global_values[w_start : w_start + window_len, 0:2].copy()  # [x, y]
-                w_vel = global_values[w_start : w_start + window_len, 2:4].copy()  # [vx, vy]
-                w_acc = global_values[w_start : w_start + window_len, 4:6].copy()  # [ax, ay]
-                w_sca = global_values[w_start : w_start + window_len, 6:11].copy() # 5个标量
+                w_pos = global_values[w_start : w_start + window_len, 0:2]  # 不copy
+                w_vel = global_values[w_start : w_start + window_len, 2:4]
+                w_acc = global_values[w_start : w_start + window_len, 4:6]
+                w_sca = global_values[w_start : w_start + window_len, 6:11]
 
                 # 转换到以当前车为中心的局部坐标系
-                lp, lv, la, ls = transform_to_agent_centric(
-                    w_pos, w_vel, w_acc, w_sca,
-                    ref_idx=history_len - 1  
-                )
-
-                # 将 4 组特征重新在最后一个维度拼接，恢复成完整的 11 维特征向量
+                lp, lv, la, ls = transform_to_agent_centric(w_pos, w_vel, w_acc, w_sca, ...)
                 lw = np.concatenate([lp, lv, la, ls], axis=-1)
-
-                # 切分为历史段(输入)和未来段(标签)
-                track_history_base.append(lw[:history_len].copy())   # (history_len, 11)
-                track_future_base.append(lw[history_len:].copy())   # (future_len, 11)
+                track_history_base.append(lw[:history_len])       # transform 已创建新数组
+                track_future_base.append(lw[history_len:])
         else:
             
             for start in range(num_windows):
