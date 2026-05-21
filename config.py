@@ -2,10 +2,10 @@ import torch
 import numpy as np
 CONFIG = {
     # ── 数据路径 ──
-    "data_path": r"D:\ZAQ\code\LP\Topic5\data",
+    "data_path": r"/remote-home/2352467/Topic5/data",
 
     # ── 数据加载 ──
-    "num_recordings": 5,       # 加载前 N 个录像 (1~60, 越多数据效果越好但越慢)
+    "num_recordings": 30,       # 加载前 N 个录像 (1~60, 越多数据效果越好但越慢)
     "min_track_len": 60,       # 最短轨迹长度 ( < history+future 的轨迹会被丢弃)
 
     # ── 序列参数 ──
@@ -26,8 +26,8 @@ CONFIG = {
     "dropout": 0.1,            # Dropout 概率
 
     # ── 训练超参数 ──
-    "batch_size": 16,          # 批大小 (CPU 训练建议 32~128)
-    "epochs": 2,              # 最大训练轮数
+    "batch_size": 32,          # 批大小 (CPU 训练建议 32~128)
+    "epochs": 30,              # 最大训练轮数
     "lr": 0.001,               # 初始学习率
     "weight_decay": 1e-5,      # L2 正则化系数
     "lr_step_size": 10,        # 学习率衰减步长 (每 N 个 epoch 衰减一次)

@@ -455,6 +455,11 @@ def main():
     X_attn = np.concatenate(test_samples_X, axis=0)[:8]
 
     fig3 = visualize_attention(model, X_attn, device)
+    save_dir = Path(__file__).parent / "results"
+    save_dir.mkdir(parents=True, exist_ok=True)
+    fig1.savefig(str(save_dir / "01_training_history.png"), dpi=300, bbox_inches='tight')
+    fig2.savefig(str(save_dir / "02_trajectory_predictions.png"), dpi=300, bbox_inches='tight')
+    fig3.savefig(str(save_dir / "03_attention_heatmap.png"), dpi=300, bbox_inches='tight')
 
     # 显示所有图形
     plt.show()
